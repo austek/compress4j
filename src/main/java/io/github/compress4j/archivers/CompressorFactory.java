@@ -45,7 +45,7 @@ public final class CompressorFactory {
     /**
      * Creates a new {@link Compressor} for the given {@link FileType}.
      *
-     * @param fileType the file type to create the compressor for
+     * @param fileType the file type to create the archive for
      * @return a new Compressor instance
      * @throws IllegalArgumentException if the given file type is not a known compression type
      */
@@ -62,7 +62,7 @@ public final class CompressorFactory {
     }
 
     /**
-     * Creates a compressor from the given compression type.
+     * Creates a archive from the given compression type.
      *
      * @param compression the name of the compression algorithm e.g. "gz" or "bzip2".
      * @return a new {@link Compressor} instance for the given compression algorithm
@@ -77,7 +77,7 @@ public final class CompressorFactory {
     }
 
     /**
-     * Creates a compressor from the given CompressionType.
+     * Creates a archive from the given CompressionType.
      *
      * @param compression the type of the compression algorithm
      * @return a new {@link Compressor} instance that uses the specified compression algorithm.

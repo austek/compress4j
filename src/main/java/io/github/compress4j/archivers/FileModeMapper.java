@@ -15,15 +15,14 @@
  */
 package io.github.compress4j.archivers;
 
+import io.github.compress4j.utils.PosixFilePermissionsMapper;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.FileSystem;
 import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.attribute.PosixFilePermission;
-import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -115,35 +114,11 @@ abstract class FileModeMapper<E extends ArchiveEntry> {
 
         private void setPermissions(int mode, File file) {
             try {
-                Set<PosixFilePermission> posixFilePermissions = PosixFilePermissionsMapper.map(mode);
+                Set<PosixFilePermission> posixFilePermissions = PosixFilePermissionsMapper.fromUnixMode(mode);
                 Files.setPosixFilePermissions(file.toPath(), posixFilePermissions);
             } catch (Exception e) {
                 LOGGER.warn("Could not set file permissions of {}", file.getName(), e);
             }
-        }
-    }
-
-    @SuppressWarnings("OctalInteger")
-    public static class PosixFilePermissionsMapper {
-
-        private PosixFilePermissionsMapper() {}
-
-        public static final Map<Integer, PosixFilePermission> intToPosixFilePermission = Map.of(
-                0400, PosixFilePermission.OWNER_READ,
-                0200, PosixFilePermission.OWNER_WRITE,
-                0100, PosixFilePermission.OWNER_EXECUTE,
-                0040, PosixFilePermission.GROUP_READ,
-                0020, PosixFilePermission.GROUP_WRITE,
-                0010, PosixFilePermission.GROUP_EXECUTE,
-                0004, PosixFilePermission.OTHERS_READ,
-                0002, PosixFilePermission.OTHERS_WRITE,
-                0001, PosixFilePermission.OTHERS_EXECUTE);
-
-        public static Set<PosixFilePermission> map(int mode) {
-            return intToPosixFilePermission.entrySet().stream()
-                    .filter(entry -> (mode & entry.getKey()) > 0)
-                    .map(Map.Entry::getValue)
-                    .collect(Collectors.toSet());
         }
     }
 }
