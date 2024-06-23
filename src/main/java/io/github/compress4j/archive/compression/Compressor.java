@@ -110,7 +110,7 @@ public abstract class Compressor<T extends ArchiveOutputStream<? extends Archive
     public final void addFile(String entryName, byte[] content, long timestamp) throws IOException {
         entryName = entryName(entryName);
         if (accept(entryName, null)) {
-            writeFileEntry(entryName, new ByteArrayInputStream(content), content.length, timestamp(timestamp), 0, null);
+            writeFileEntry(entryName, new ByteArrayInputStream(content), content.length, timestamp(timestamp), 0);
         }
     }
 
@@ -121,7 +121,7 @@ public abstract class Compressor<T extends ArchiveOutputStream<? extends Archive
     public final void addFile(String entryName, InputStream content, long timestamp) throws IOException {
         entryName = entryName(entryName);
         if (accept(entryName, null)) {
-            writeFileEntry(entryName, content, -1, timestamp(timestamp), 0, null);
+            writeFileEntry(entryName, content, -1, timestamp(timestamp), 0);
         }
     }
 
@@ -156,9 +156,17 @@ public abstract class Compressor<T extends ArchiveOutputStream<? extends Archive
     private void addFile(Path file, BasicFileAttributes attrs, String name, long explicitTimestamp) throws IOException {
         try (InputStream source = Files.newInputStream(file)) {
             long timestamp = explicitTimestamp == -1 ? attrs.lastModifiedTime().toMillis() : explicitTimestamp;
-            String symlinkTarget =
-                    attrs.isSymbolicLink() ? Files.readSymbolicLink(file).toString() : null;
-            writeFileEntry(name, source, attrs.size(), timestamp, mode(file), symlinkTarget);
+            if (attrs.isSymbolicLink()) {
+                writeFileEntry(
+                        name,
+                        source,
+                        attrs.size(),
+                        timestamp,
+                        mode(file),
+                        Files.readSymbolicLink(file).toString());
+            } else {
+                writeFileEntry(name, source, attrs.size(), timestamp, mode(file));
+            }
         }
     }
 
