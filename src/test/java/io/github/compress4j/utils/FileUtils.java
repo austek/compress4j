@@ -22,9 +22,45 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
+import java.nio.file.Path;
 
 public class FileUtils {
     private FileUtils() {}
+
+    /**
+     * Create the parent directories of a file if they do not exist.
+     *
+     * @param p path to create the parent directories for.
+     * @throws IOException the directories could not be created.
+     */
+    public static void createDirectories(Path p) throws IOException {
+        createDirectories(p.toFile());
+    }
+
+    /**
+     * Create the parent directories of a file if they do not exist.
+     *
+     * @param f file to create the parent directories for.
+     * @throws IOException the directories could not be created.
+     */
+    public static void createDirectories(File f) throws IOException {
+        File p = f.getParentFile();
+        if (!f.exists() && !f.mkdirs()) {
+            throw new IOException("Could not create directory " + p);
+        }
+    }
+
+    /**
+     * Write a string as a UTF-8 file.
+     *
+     * @param p path to write the string to. If the parent directory does not exist, the missing parent directories are
+     *     automatically created.
+     * @param body content to write to the file.
+     * @throws IOException the file could not be written.
+     */
+    public static void write(Path p, String body) throws IOException {
+        write(p.toFile(), body);
+    }
 
     /**
      * Write a string as a UTF-8 file.

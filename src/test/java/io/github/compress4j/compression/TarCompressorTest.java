@@ -16,16 +16,26 @@
 package io.github.compress4j.compression;
 
 import static io.github.compress4j.utils.FileUtils.write;
+import static java.nio.file.Files.createDirectories;
+import static java.nio.file.Files.createFile;
+import static java.nio.file.Files.getPosixFilePermissions;
+import static java.util.Map.entry;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import io.github.compress4j.archive.compression.TarCompressor;
+import io.github.compress4j.archive.decompression.TarDecompressor;
 import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.Map;
+import java.util.Set;
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream;
 import org.apache.commons.io.IOUtils;
@@ -38,7 +48,7 @@ class TarCompressorTest {
     void simpleTar(@TempDir Path tempDir) throws IOException {
         var tar = tempDir.resolve("test.tar");
         var data = tempDir.resolve("file.txt");
-        write(data.toFile(), "789");
+        write(data, "789");
         try (var compressor = new TarCompressor(tar)) {
             compressor.addFile("empty.txt", new byte[0]);
             compressor.addFile("file1.txt", "123".getBytes());
@@ -47,6 +57,73 @@ class TarCompressorTest {
         }
 
         assertTar(tar, Map.of("empty.txt", "", "file1.txt", "123", "file2.txt", "456", "file3.txt", "789"));
+    }
+
+    @Test
+    void recursiveTarWithPrefix(@TempDir Path tempDir) throws IOException {
+        var dir = tempDir.resolve("dir");
+        write(tempDir.resolve("dir/f1"), "1");
+        write(tempDir.resolve("dir/f2"), "2");
+        write(tempDir.resolve("dir/d1/f11"), "11");
+        write(tempDir.resolve("dir/d1/f12"), "12");
+        write(tempDir.resolve("dir/d1/d11/f111"), "111");
+        write(tempDir.resolve("dir/d1/d11/f112"), "112");
+        write(tempDir.resolve("dir/d2/f21"), "21");
+        write(tempDir.resolve("dir/d2/f22"), "22");
+
+        var tar = tempDir.resolve("test.tar");
+        try (var compressor = new TarCompressor(tar)) {
+            compressor.addDirectory("tar/", dir);
+        }
+        assertTar(
+                tar,
+                Map.ofEntries(
+                        entry("tar/", ""),
+                        entry("tar/d1/", ""),
+                        entry("tar/d1/d11/", ""),
+                        entry("tar/d2/", ""),
+                        entry("tar/f1", "1"),
+                        entry("tar/f2", "2"),
+                        entry("tar/d1/f11", "11"),
+                        entry("tar/d1/f12", "12"),
+                        entry("tar/d1/d11/f111", "111"),
+                        entry("tar/d1/d11/f112", "112"),
+                        entry("tar/d2/f21", "21"),
+                        entry("tar/d2/f22", "22")));
+    }
+
+    @Test
+    void tarWithEmptyPrefix(@TempDir Path tempDir) throws IOException {
+        Path file = tempDir.resolve("dir/file");
+        createDirectories(file.getParent());
+        createFile(file);
+        var tar = tempDir.resolve("test.tar");
+        try (var compressor = new TarCompressor(tar)) {
+            compressor.addDirectory("", file.getParent());
+        }
+        assertTar(tar, Map.of(file.getFileName().toString(), ""));
+    }
+
+    @Test
+    void tarWithExecutableFiles(@TempDir Path tempDir) throws IOException {
+        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
+        var dir = tempDir.resolve("dir");
+        createDirectories(dir);
+        var regular = dir.resolve("regular");
+        createFile(regular);
+        var executable = dir.resolve("executable");
+        createFile(executable, PosixFilePermissions.asFileAttribute(Set.of(PosixFilePermission.values())));
+
+        var tar = tempDir.resolve("test.tgz");
+        try (var compressor = new TarCompressor(tar)) {
+            compressor.addDirectory(dir);
+        }
+        var out = tempDir.resolve("out");
+        new TarDecompressor(tar).extract(out);
+        assertThat(getPosixFilePermissions(out.resolve(regular.getFileName())))
+                .doesNotContain(PosixFilePermission.OWNER_EXECUTE);
+        assertThat(getPosixFilePermissions(out.resolve(executable.getFileName())))
+                .contains(PosixFilePermission.OWNER_EXECUTE);
     }
 
     private void assertTar(Path tar, Map<String, String> expected) throws IOException {
