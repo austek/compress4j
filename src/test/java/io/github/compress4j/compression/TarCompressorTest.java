@@ -15,6 +15,8 @@
  */
 package io.github.compress4j.compression;
 
+import static io.github.compress4j.utils.Assumptions.assumeSymLinkCreationIsSupported;
+import static io.github.compress4j.utils.FileUtils.deleteRecursively;
 import static io.github.compress4j.utils.FileUtils.write;
 import static java.nio.file.Files.createDirectories;
 import static java.nio.file.Files.createFile;
@@ -45,7 +47,7 @@ import org.junit.jupiter.api.io.TempDir;
 class TarCompressorTest {
 
     @Test
-    void simpleTar(@TempDir Path tempDir) throws IOException {
+    void shouldAddFiles(@TempDir Path tempDir) throws IOException {
         var tar = tempDir.resolve("test.tar");
         var data = tempDir.resolve("file.txt");
         write(data, "789");
@@ -60,41 +62,41 @@ class TarCompressorTest {
     }
 
     @Test
-    void recursiveTarWithPrefix(@TempDir Path tempDir) throws IOException {
-        var dir = tempDir.resolve("dir");
-        write(tempDir.resolve("dir/f1"), "1");
-        write(tempDir.resolve("dir/f2"), "2");
-        write(tempDir.resolve("dir/d1/f11"), "11");
-        write(tempDir.resolve("dir/d1/f12"), "12");
-        write(tempDir.resolve("dir/d1/d11/f111"), "111");
-        write(tempDir.resolve("dir/d1/d11/f112"), "112");
-        write(tempDir.resolve("dir/d2/f21"), "21");
-        write(tempDir.resolve("dir/d2/f22"), "22");
+    void shouldAddDirectoriesRecursively(@TempDir Path tempDir) throws IOException {
+        var base = tempDir.resolve("base");
+        write(tempDir.resolve("base/file1"), "1");
+        write(tempDir.resolve("base/file2"), "2");
+        write(tempDir.resolve("base/subDir1/file11"), "11");
+        write(tempDir.resolve("base/subDir1/file12"), "12");
+        write(tempDir.resolve("base/subDir1/d11/file111"), "111");
+        write(tempDir.resolve("base/subDir1/d11/file112"), "112");
+        write(tempDir.resolve("base/subDir2/file21"), "21");
+        write(tempDir.resolve("base/subDir2/file22"), "22");
 
         var tar = tempDir.resolve("test.tar");
         try (var compressor = new TarCompressor(tar)) {
-            compressor.addDirectory("tar/", dir);
+            compressor.addDirectory("tar/", base);
         }
         assertTar(
                 tar,
                 Map.ofEntries(
                         entry("tar/", ""),
-                        entry("tar/d1/", ""),
-                        entry("tar/d1/d11/", ""),
-                        entry("tar/d2/", ""),
-                        entry("tar/f1", "1"),
-                        entry("tar/f2", "2"),
-                        entry("tar/d1/f11", "11"),
-                        entry("tar/d1/f12", "12"),
-                        entry("tar/d1/d11/f111", "111"),
-                        entry("tar/d1/d11/f112", "112"),
-                        entry("tar/d2/f21", "21"),
-                        entry("tar/d2/f22", "22")));
+                        entry("tar/subDir1/", ""),
+                        entry("tar/subDir1/d11/", ""),
+                        entry("tar/subDir2/", ""),
+                        entry("tar/file1", "1"),
+                        entry("tar/file2", "2"),
+                        entry("tar/subDir1/file11", "11"),
+                        entry("tar/subDir1/file12", "12"),
+                        entry("tar/subDir1/d11/file111", "111"),
+                        entry("tar/subDir1/d11/file112", "112"),
+                        entry("tar/subDir2/file21", "21"),
+                        entry("tar/subDir2/file22", "22")));
     }
 
     @Test
     void tarWithEmptyPrefix(@TempDir Path tempDir) throws IOException {
-        Path file = tempDir.resolve("dir/file");
+        Path file = tempDir.resolve("base/file");
         createDirectories(file.getParent());
         createFile(file);
         var tar = tempDir.resolve("test.tar");
@@ -107,16 +109,16 @@ class TarCompressorTest {
     @Test
     void tarWithExecutableFiles(@TempDir Path tempDir) throws IOException {
         assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"));
-        var dir = tempDir.resolve("dir");
-        createDirectories(dir);
-        var regular = dir.resolve("regular");
+        var base = tempDir.resolve("base");
+        createDirectories(base);
+        var regular = base.resolve("regular");
         createFile(regular);
-        var executable = dir.resolve("executable");
+        var executable = base.resolve("executable");
         createFile(executable, PosixFilePermissions.asFileAttribute(Set.of(PosixFilePermission.values())));
 
-        var tar = tempDir.resolve("test.tgz");
+        var tar = tempDir.resolve("test.tar");
         try (var compressor = new TarCompressor(tar)) {
-            compressor.addDirectory(dir);
+            compressor.addDirectory(base);
         }
         var out = tempDir.resolve("out");
         new TarDecompressor(tar).extract(out);
@@ -124,6 +126,30 @@ class TarCompressorTest {
                 .doesNotContain(PosixFilePermission.OWNER_EXECUTE);
         assertThat(getPosixFilePermissions(out.resolve(executable.getFileName())))
                 .contains(PosixFilePermission.OWNER_EXECUTE);
+    }
+
+    @Test
+    void shouldCompressWithSymbolicLinks(@TempDir Path tempDir) throws IOException {
+        assumeSymLinkCreationIsSupported();
+
+        var base = tempDir.resolve("base");
+        createDirectories(base);
+        var origin = base.resolve("origin");
+        createFile(origin);
+        var link = base.resolve("link");
+        Files.createSymbolicLink(link, origin.getFileName());
+
+        var tar = tempDir.resolve("test.tgz");
+        try (var compressor = new TarCompressor(tar)) {
+            compressor.addDirectory(base);
+        }
+        deleteRecursively(base);
+
+        var out = tempDir.resolve("out");
+        new TarDecompressor(tar).extract(out);
+        assertThat(out.resolve(link.getFileName()))
+                .isSymbolicLink()
+                .hasSameBinaryContentAs(out.resolve(origin.getFileName()));
     }
 
     private void assertTar(Path tar, Map<String, String> expected) throws IOException {

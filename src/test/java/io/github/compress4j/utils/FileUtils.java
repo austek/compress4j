@@ -22,31 +22,18 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.io.Writer;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Comparator;
+import java.util.stream.Stream;
 
 public class FileUtils {
     private FileUtils() {}
 
-    /**
-     * Create the parent directories of a file if they do not exist.
-     *
-     * @param p path to create the parent directories for.
-     * @throws IOException the directories could not be created.
-     */
-    public static void createDirectories(Path p) throws IOException {
-        createDirectories(p.toFile());
-    }
-
-    /**
-     * Create the parent directories of a file if they do not exist.
-     *
-     * @param f file to create the parent directories for.
-     * @throws IOException the directories could not be created.
-     */
-    public static void createDirectories(File f) throws IOException {
-        File p = f.getParentFile();
-        if (!f.exists() && !f.mkdirs()) {
-            throw new IOException("Could not create directory " + p);
+    public static void deleteRecursively(Path pathToBeDeleted) throws IOException {
+        try (Stream<Path> walker = Files.walk(pathToBeDeleted)) {
+            //noinspection ResultOfMethodCallIgnored
+            walker.sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
         }
     }
 

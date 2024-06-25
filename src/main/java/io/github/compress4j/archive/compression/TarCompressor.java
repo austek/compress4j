@@ -22,6 +22,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
@@ -29,11 +30,12 @@ import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
 import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.apache.commons.compress.archivers.tar.TarConstants;
 
+@SuppressWarnings({"unused", "OptionalUsedAsFieldOrParameterType"})
 public class TarCompressor extends Compressor<TarArchiveOutputStream> {
     private final TarArchiveOutputStream myStream;
 
-    public TarCompressor(Path file) throws IOException {
-        this(Files.newOutputStream(file));
+    public TarCompressor(Path path) throws IOException {
+        this(path, Collections.emptyMap());
     }
 
     public TarCompressor(Path file, Map<String, Object> options) throws IOException {
@@ -48,47 +50,48 @@ public class TarCompressor extends Compressor<TarArchiveOutputStream> {
         myStream = createArchiveOutputStream(stream, options);
     }
 
+    private static TarArchiveEntry getArchiveEntry(String name, Optional<Path> symlinkTarget) {
+        return symlinkTarget
+                .map(link -> {
+                    var entry = new TarArchiveEntry(name, TarConstants.LF_SYMLINK);
+                    entry.setSize(0);
+                    entry.setLinkName(link.toString());
+                    return entry;
+                })
+                .orElseGet(() -> new TarArchiveEntry(name));
+    }
+
     @Override
-    protected void writeDirectoryEntry(String name, long timestamp) throws IOException {
+    protected void writeDirectoryEntry(String name, FileTime time) throws IOException {
         TarArchiveEntry e = new TarArchiveEntry(name + '/');
-        e.setModTime(timestamp);
+        e.setModTime(time);
         myStream.putArchiveEntry(e);
         myStream.closeArchiveEntry();
     }
 
     @Override
-    protected void writeFileEntry(String name, InputStream source, long length, long timestamp, int mode)
+    protected void writeFileEntry(String name, InputStream source, long length, FileTime time, int mode)
             throws IOException {
-        writeFileEntry(name, source, length, timestamp, mode, Optional.empty());
+        writeFileEntry(name, source, length, time, mode, Optional.empty());
     }
 
     @Override
     protected void writeFileEntry(
-            String name, InputStream source, long length, long timestamp, int mode, String symlinkTarget)
+            String name, InputStream source, long length, FileTime time, int mode, Path symlinkTarget)
             throws IOException {
-        writeFileEntry(name, source, length, timestamp, mode, Optional.of(symlinkTarget));
+        writeFileEntry(name, source, length, time, mode, Optional.of(symlinkTarget));
     }
 
     private void writeFileEntry(
-            String name,
-            InputStream source,
-            long length,
-            long timestamp,
-            int mode,
-            @SuppressWarnings("OptionalUsedAsFieldOrParameterType") Optional<String> symlinkTarget)
+            String name, InputStream source, long length, FileTime timestamp, int mode, Optional<Path> symlinkTarget)
             throws IOException {
-        TarArchiveEntry e = symlinkTarget
-                .map(link -> {
-                    var entry = new TarArchiveEntry(name, TarConstants.LF_SYMLINK);
-                    entry.setSize(0);
-                    entry.setLinkName(link);
-                    return entry;
-                })
-                .orElseGet(() -> new TarArchiveEntry(name));
+        TarArchiveEntry e = getArchiveEntry(name, symlinkTarget);
         if (length < 0) {
             length = source.available();
         }
-        e.setSize(length);
+        if (symlinkTarget.isEmpty()) {
+            e.setSize(length);
+        }
         e.setModTime(timestamp);
         if (mode != 0) {
             e.setMode(mode);

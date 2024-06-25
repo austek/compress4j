@@ -16,6 +16,7 @@
 package io.github.compress4j.utils;
 
 import java.nio.file.FileSystems;
+import java.util.Locale;
 
 public class SystemUtils {
     private SystemUtils() {}
@@ -23,8 +24,15 @@ public class SystemUtils {
     public static final String OS_NAME_WINDOWS_PREFIX = "Windows";
 
     public static final String OS_NAME = System.getProperty("os.name");
+    public static final String OS_VERSION = System.getProperty("os.version").toLowerCase(Locale.ENGLISH);
 
     public static final boolean IS_OS_WINDOWS = OS_NAME != null && OS_NAME.startsWith(OS_NAME_WINDOWS_PREFIX);
+
+    public static final boolean IS_OS_UNIX = !IS_OS_WINDOWS;
+
+    public static String getOsNameAndVersion() {
+        return OS_VERSION + ' ' + OS_VERSION;
+    }
 
     public static final boolean IS_POSIX_FILE_SYSTEM =
             FileSystems.getDefault().supportedFileAttributeViews().contains("posix");

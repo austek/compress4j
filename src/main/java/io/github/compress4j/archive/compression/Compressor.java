@@ -35,8 +35,11 @@ import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.DosFileAttributeView;
 import java.nio.file.attribute.DosFileAttributes;
+import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFileAttributeView;
+import java.time.Instant;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.BiPredicate;
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.ArchiveOutputStream;
@@ -44,6 +47,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+@SuppressWarnings({"OptionalUsedAsFieldOrParameterType", "unused"})
 public abstract class Compressor<T extends ArchiveOutputStream<? extends ArchiveEntry>> implements Closeable {
     /** Compression-level for the archive file. Only values in [0-9] are allowed. */
     protected static final String COMPRESSION_LEVEL = "compression-level";
@@ -56,10 +60,6 @@ public abstract class Compressor<T extends ArchiveOutputStream<? extends Archive
         String entryName = StringUtil.trimLeading(StringUtil.trimTrailing(name.replace('\\', '/'), '/'), '/');
         if (entryName.isEmpty()) throw new IllegalArgumentException("Invalid entry name: " + name);
         return entryName;
-    }
-
-    private static long timestamp(long timestamp) {
-        return timestamp == -1 ? System.currentTimeMillis() : timestamp;
     }
 
     private static int mode(Path file) throws IOException {
@@ -93,10 +93,14 @@ public abstract class Compressor<T extends ArchiveOutputStream<? extends Archive
     }
 
     public final void addFile(String entryName, Path file) throws IOException {
-        addFile(entryName, file, -1);
+        addFile(entryName, file, Optional.empty());
     }
 
-    public final void addFile(String entryName, Path file, long timestamp) throws IOException {
+    public final void addFile(String entryName, Path file, FileTime timestamp) throws IOException {
+        addFile(entryName, file, Optional.of(timestamp));
+    }
+
+    private void addFile(String entryName, Path file, Optional<FileTime> timestamp) throws IOException {
         entryName = entryName(entryName);
         if (accept(entryName, file)) {
             addFile(file, Files.readAttributes(file, BasicFileAttributes.class), entryName, timestamp);
@@ -104,35 +108,52 @@ public abstract class Compressor<T extends ArchiveOutputStream<? extends Archive
     }
 
     public final void addFile(String entryName, byte[] content) throws IOException {
-        addFile(entryName, content, -1);
+        addFile(entryName, content, Optional.empty());
     }
 
-    public final void addFile(String entryName, byte[] content, long timestamp) throws IOException {
+    public final void addFile(String entryName, byte[] content, FileTime time) throws IOException {
+        addFile(entryName, content, Optional.of(time));
+    }
+
+    private void addFile(String entryName, byte[] content, Optional<FileTime> time) throws IOException {
         entryName = entryName(entryName);
         if (accept(entryName, null)) {
-            writeFileEntry(entryName, new ByteArrayInputStream(content), content.length, timestamp(timestamp), 0);
+            writeFileEntry(
+                    entryName,
+                    new ByteArrayInputStream(content),
+                    content.length,
+                    time.orElse(FileTime.from(Instant.now())),
+                    0);
         }
     }
 
     public final void addFile(String entryName, InputStream content) throws IOException {
-        addFile(entryName, content, -1);
+        addFile(entryName, content, Optional.empty());
     }
 
-    public final void addFile(String entryName, InputStream content, long timestamp) throws IOException {
+    public final void addFile(String entryName, InputStream content, FileTime time) throws IOException {
+        addFile(entryName, content, Optional.of(time));
+    }
+
+    private void addFile(String entryName, InputStream content, Optional<FileTime> time) throws IOException {
         entryName = entryName(entryName);
         if (accept(entryName, null)) {
-            writeFileEntry(entryName, content, -1, timestamp(timestamp), 0);
+            writeFileEntry(entryName, content, -1, time.orElse(FileTime.from(Instant.now())), 0);
         }
     }
 
     public final void addDirectory(String entryName) throws IOException {
-        addDirectory(entryName, -1);
+        addDirectory(entryName, Optional.empty());
     }
 
-    public final void addDirectory(String entryName, long timestamp) throws IOException {
+    public final void addDirectory(String entryName, FileTime time) throws IOException {
+        addDirectory(entryName, Optional.of(time));
+    }
+
+    private void addDirectory(String entryName, Optional<FileTime> time) throws IOException {
         entryName = entryName(entryName);
         if (accept(entryName, null)) {
-            writeDirectoryEntry(entryName, timestamp(timestamp));
+            writeDirectoryEntry(entryName, time.orElse(FileTime.from(Instant.now())));
         }
     }
 
@@ -140,76 +161,40 @@ public abstract class Compressor<T extends ArchiveOutputStream<? extends Archive
         addDirectory("", directory);
     }
 
-    public final void addDirectory(String prefix, Path directory) throws IOException {
-        addDirectory(prefix, directory, -1);
+    public final void addDirectory(Path directory, FileTime time) throws IOException {
+        addDirectory("", directory, time);
     }
 
-    public final void addDirectory(String prefix, Path directory, long timestampInMillis) throws IOException {
+    public final void addDirectory(String prefix, Path directory) throws IOException {
         prefix = prefix.isEmpty() ? "" : entryName(prefix);
-        addRecursively(prefix, directory, timestampInMillis);
+        addRecursively(prefix, directory, Optional.empty());
+    }
+
+    public final void addDirectory(String prefix, Path directory, FileTime time) throws IOException {
+        prefix = prefix.isEmpty() ? "" : entryName(prefix);
+        addRecursively(prefix, directory, Optional.of(time));
     }
 
     private boolean accept(String entryName, @Nullable Path file) {
         return entryFilter == null || entryFilter.test(entryName, file);
     }
 
-    private void addFile(Path file, BasicFileAttributes attrs, String name, long explicitTimestamp) throws IOException {
+    private void addFile(Path file, BasicFileAttributes attrs, String name, Optional<FileTime> time)
+            throws IOException {
         try (InputStream source = Files.newInputStream(file)) {
-            long timestamp = explicitTimestamp == -1 ? attrs.lastModifiedTime().toMillis() : explicitTimestamp;
+            FileTime timestamp = time.orElse(attrs.lastModifiedTime());
             if (attrs.isSymbolicLink()) {
-                writeFileEntry(
-                        name,
-                        source,
-                        attrs.size(),
-                        timestamp,
-                        mode(file),
-                        Files.readSymbolicLink(file).toString());
+                writeFileEntry(name, source, attrs.size(), timestamp, mode(file), Files.readSymbolicLink(file));
             } else {
                 writeFileEntry(name, source, attrs.size(), timestamp, mode(file));
             }
         }
     }
 
-    private void addRecursively(String prefix, Path root, long timestampMs) throws IOException {
+    private void addRecursively(String prefix, Path root, Optional<FileTime> time) throws IOException {
         LOGGER.atTrace().log("dir={} prefix={}", root, prefix);
 
-        Files.walkFileTree(root, new SimpleFileVisitor<>() {
-            @Override
-            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
-                String name = dir == root ? prefix : entryName(dir);
-                if (name.isEmpty()) {
-                    return FileVisitResult.CONTINUE;
-                } else if (accept(name, dir)) {
-                    LOGGER.atTrace().log("  {} -> {}/", dir, name);
-                    writeDirectoryEntry(
-                            name, timestampMs == -1 ? attrs.lastModifiedTime().toMillis() : timestampMs);
-                    return FileVisitResult.CONTINUE;
-                } else {
-                    return FileVisitResult.SKIP_SUBTREE;
-                }
-            }
-
-            @Override
-            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
-                String name = entryName(file);
-                if (accept(name, file)) {
-                    LOGGER.atTrace()
-                            .log(
-                                    "  {} -> {}{}",
-                                    file,
-                                    name,
-                                    attrs.isSymbolicLink() ? " symlink" : " size=" + attrs.size());
-                    addFile(file, attrs, name, timestampMs);
-                }
-                return FileVisitResult.CONTINUE;
-            }
-
-            private String entryName(Path fileOrDir) {
-                String relativeName =
-                        Compressor.entryName(root.relativize(fileOrDir).toString());
-                return prefix.isEmpty() ? relativeName : prefix + '/' + relativeName;
-            }
-        });
+        Files.walkFileTree(root, new PathSimpleFileVisitor<>(this, root, prefix, time));
 
         LOGGER.atTrace().log(".");
     }
@@ -257,13 +242,13 @@ public abstract class Compressor<T extends ArchiveOutputStream<? extends Archive
         }
     }
 
-    protected abstract void writeDirectoryEntry(String name, long timestamp) throws IOException;
+    protected abstract void writeDirectoryEntry(String name, FileTime time) throws IOException;
 
-    protected abstract void writeFileEntry(String name, InputStream source, long length, long timestamp, int mode)
+    protected abstract void writeFileEntry(String name, InputStream source, long length, FileTime time, int mode)
             throws IOException;
 
     protected abstract void writeFileEntry(
-            String name, InputStream source, long length, long timestamp, int mode, String symlinkTarget)
+            String name, InputStream source, long length, FileTime time, int mode, Path symlinkTarget)
             throws IOException;
 
     /**
@@ -287,4 +272,53 @@ public abstract class Compressor<T extends ArchiveOutputStream<? extends Archive
      * @throws IOException thrown by the underlying output stream for I/O errors
      */
     protected abstract T createArchiveOutputStream(OutputStream s, Map<String, Object> o) throws IOException;
+
+    private static class PathSimpleFileVisitor<E extends ArchiveOutputStream<? extends ArchiveEntry>>
+            extends SimpleFileVisitor<Path> {
+        private final Path root;
+        private final String prefix;
+
+        @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
+        private final Optional<FileTime> time;
+
+        private final Compressor<E> compressor;
+
+        public PathSimpleFileVisitor(Compressor<E> compressor, Path root, String prefix, Optional<FileTime> time) {
+            this.root = root;
+            this.prefix = prefix;
+            this.time = time;
+            this.compressor = compressor;
+        }
+
+        @Override
+        public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException {
+            String name = dir == root ? prefix : entryName(dir);
+            if (name.isEmpty()) {
+                return FileVisitResult.CONTINUE;
+            } else if (compressor.accept(name, dir)) {
+                LOGGER.atTrace().log("  {} -> {}/", dir, name);
+                compressor.writeDirectoryEntry(name, time.orElse(attrs.lastModifiedTime()));
+                return FileVisitResult.CONTINUE;
+            } else {
+                return FileVisitResult.SKIP_SUBTREE;
+            }
+        }
+
+        @Override
+        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+            String name = entryName(file);
+            if (compressor.accept(name, file)) {
+                LOGGER.atTrace()
+                        .log("  {} -> {}{}", file, name, attrs.isSymbolicLink() ? " symlink" : " size=" + attrs.size());
+                compressor.addFile(file, attrs, name, time);
+            }
+            return FileVisitResult.CONTINUE;
+        }
+
+        private String entryName(Path fileOrDir) {
+            String relativeName =
+                    Compressor.entryName(root.relativize(fileOrDir).toString());
+            return prefix.isEmpty() ? relativeName : prefix + '/' + relativeName;
+        }
+    }
 }
