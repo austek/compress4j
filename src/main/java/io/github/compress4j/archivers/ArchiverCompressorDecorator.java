@@ -21,6 +21,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import org.apache.commons.compress.archivers.ArchiveException;
 import org.apache.commons.compress.compressors.CompressorException;
@@ -70,7 +71,7 @@ class ArchiverCompressorDecorator<E extends org.apache.commons.compress.archiver
     }
 
     @Override
-    public void extract(File archive, File destination) throws IOException {
+    public void extract(File archive, File destination, CopyOption... options) throws IOException {
         IOUtils.requireDirectory(destination);
 
         /*
@@ -82,7 +83,7 @@ class ArchiverCompressorDecorator<E extends org.apache.commons.compress.archiver
         }
 
         try (InputStream archiveStream = new BufferedInputStream(new FileInputStream(archive))) {
-            archiver.extract(compressor.decompressingStream(archiveStream), destination);
+            archiver.extract(compressor.decompressingStream(archiveStream), destination, options);
         } catch (FileNotFoundException e) {
             // Java throws F-N-F for no access, and callers expect I-A-E for that.
             throw new IllegalArgumentException(
@@ -91,9 +92,9 @@ class ArchiverCompressorDecorator<E extends org.apache.commons.compress.archiver
     }
 
     @Override
-    public void extract(InputStream archive, File destination) throws IOException {
+    public void extract(InputStream archive, File destination, CopyOption... options) throws IOException {
         IOUtils.requireDirectory(destination);
-        archiver.extract(compressor.decompressingStream(archive), destination);
+        archiver.extract(compressor.decompressingStream(archive), destination, options);
     }
 
     @Override

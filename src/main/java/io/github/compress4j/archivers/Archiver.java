@@ -18,6 +18,7 @@ package io.github.compress4j.archivers;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.CopyOption;
 
 /**
  * An Archiver facades a specific archiving library, allowing for simple archiving of files and directories, and
@@ -62,9 +63,10 @@ public interface Archiver {
      *
      * @param archive the archive file to extract
      * @param destination the directory to which to extract the files
+     * @param options options specifying how the copy should be done
      * @throws IOException propagated I/O errors by {@code java.io}
      */
-    void extract(File archive, File destination) throws IOException;
+    void extract(File archive, File destination, CopyOption... options) throws IOException;
 
     /**
      * Extracts the given archive supplied as an input stream into the given destination directory. <br>
@@ -72,9 +74,10 @@ public interface Archiver {
      *
      * @param archive the archive contents as a stream.
      * @param destination the destination directory.
+     * @param options options specifying how the copy should be done
      * @throws IOException propagated I/O errors by {@code java.io}
      */
-    void extract(InputStream archive, File destination) throws IOException;
+    void extract(InputStream archive, File destination, CopyOption... options) throws IOException;
 
     /**
      * Reads the given archive file as an {@link ArchiveStream} which is used to access individual {@link ArchiveEntry}

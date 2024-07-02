@@ -18,11 +18,7 @@ package io.github.compress4j.archivers;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.DirectoryNotEmptyException;
-import java.nio.file.FileAlreadyExistsException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
+import java.nio.file.*;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 import org.apache.commons.compress.archivers.ArchiveEntry;
@@ -49,6 +45,7 @@ public final class IOUtils {
      * @param in the input stream to read from
      * @param destination the directory to copy the file to
      * @param entry the path to the file
+     * @param options options specifying how the copy should be done
      * @return the number of bytes read or written
      * @param <A> ArchiveEntry to be used
      * @throws IOException if an I/O error occurs when reading or writing
@@ -58,7 +55,8 @@ public final class IOUtils {
      *     replaced because it is a non-empty directory <i>(optional specific exception)</i> *
      * @throws UnsupportedOperationException if {@code options} contains a copy option that is not supported
      */
-    public static <A extends ArchiveEntry> File copy(InputStream in, File destination, A entry) throws IOException {
+    public static <A extends ArchiveEntry> File copy(InputStream in, File destination, A entry, CopyOption... options)
+            throws IOException {
         File file = createResourceInDestination(destination, entry.getName());
 
         if (entry.isDirectory()) {
@@ -67,7 +65,7 @@ public final class IOUtils {
         } else {
             //noinspection ResultOfMethodCallIgnored
             file.getParentFile().mkdirs();
-            Files.copy(in, file.toPath());
+            Files.copy(in, file.toPath(), options);
         }
 
         FileModeMapper.map(entry, file);

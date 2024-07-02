@@ -17,6 +17,7 @@ package io.github.compress4j.archivers;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.CopyOption;
 import java.util.Date;
 
 /**
@@ -66,6 +67,7 @@ public interface ArchiveEntry {
      * <p>The destination is expected to be a writable directory.
      *
      * @param destination the directory to extract the value to
+     * @param options options specifying how the copy should be done
      * @return the extracted File
      * @throws IOException propagated I/O errors by {@code java.io}
      * @throws IllegalStateException if the entry is out of sync with the stream
@@ -73,5 +75,6 @@ public interface ArchiveEntry {
      *     given location
      */
     @SuppressWarnings("UnusedReturnValue")
-    File extract(File destination) throws IOException, IllegalStateException, IllegalArgumentException;
+    File extract(File destination, CopyOption... options)
+            throws IOException, IllegalStateException, IllegalArgumentException;
 }

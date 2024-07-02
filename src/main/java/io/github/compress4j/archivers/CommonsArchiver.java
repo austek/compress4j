@@ -20,6 +20,7 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.file.CopyOption;
 import java.util.Objects;
 import org.apache.commons.compress.archivers.ArchiveEntry;
 import org.apache.commons.compress.archivers.ArchiveException;
@@ -70,25 +71,26 @@ class CommonsArchiver<E extends ArchiveEntry> implements Archiver {
     }
 
     @Override
-    public void extract(File archive, File destination) throws IOException {
+    public void extract(File archive, File destination, CopyOption... options) throws IOException {
         assertExtractSource(archive);
 
         IOUtils.requireDirectory(destination);
 
         try (ArchiveInputStream<?> input = createArchiveInputStream(archive)) {
-            extract(input, destination);
+            extract(input, destination, options);
         }
     }
 
     @Override
-    public void extract(InputStream archive, File destination) throws IOException {
-        extract(createArchiveInputStream(archive), destination);
+    public void extract(InputStream archive, File destination, CopyOption... options) throws IOException {
+        extract(createArchiveInputStream(archive), destination, options);
     }
 
-    private <T extends ArchiveEntry> void extract(ArchiveInputStream<T> input, File destination) throws IOException {
+    private <T extends ArchiveEntry> void extract(ArchiveInputStream<T> input, File destination, CopyOption... options)
+            throws IOException {
         T entry;
         while ((entry = input.getNextEntry()) != null) {
-            IOUtils.copy(input, destination, entry);
+            IOUtils.copy(input, destination, entry, options);
         }
     }
 

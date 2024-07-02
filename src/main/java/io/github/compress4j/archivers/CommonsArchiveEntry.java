@@ -17,6 +17,7 @@ package io.github.compress4j.archivers;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.CopyOption;
 import java.util.Date;
 
 /** Implementation of an {@link ArchiveEntry} that wraps the commons compress version of the same type. */
@@ -58,9 +59,10 @@ class CommonsArchiveEntry implements ArchiveEntry {
     }
 
     @Override
-    public File extract(File destination) throws IOException, IllegalStateException, IllegalArgumentException {
+    public File extract(File destination, CopyOption... options)
+            throws IOException, IllegalStateException, IllegalArgumentException {
         assertState();
-        return IOUtils.copy(stream, destination, entry);
+        return IOUtils.copy(stream, destination, entry, options);
     }
 
     private void assertState() {
